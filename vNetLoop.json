@@ -1,0 +1,63 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/VNET.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "String",
+            "defaultValue": "West Europe",
+            "metadata": {
+                "Description": "This is the region where the resources will be created"
+            }
+        },
+        "virtualNetworkName": {
+            "type": "string",
+            "defaultValue": "ARMvNet",
+            "metadata": {
+                "Description": "This is the name of the Virtual Network, suffixed by the loop number"
+            }
+        },
+        "addressPrefix": {
+            "type": "array",
+            "defaultValue": [
+                "192.168.0.0/24",
+                "192.168.1.0/24",
+                "192.168.2.0/24"
+            ],
+            "metadata": {
+                "Description": "The CIDR address space for your Virtual Networks in Azure"
+            }
+        },
+        "DNSServerAddress": {
+            "type": "array",
+            "defaultValue": [
+                "192.168.0.131",
+                "192.168.0.132"
+            ]
+
+        }
+    },
+
+    "resources": [
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[concat(parameters('virtualNetworkName'), copyIndex(100))]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[parameters('addressPrefix')[copyIndex()]]"
+                    ]
+                },
+                "dhcpOptions": {
+                    "dnsServers": "[parameters('DNSServerAddress')]"
+                }
+            },
+            "copy": {
+                "name": "vNetCopyLoop",
+                "count": 3
+            }
+
+        }
+    ]
+}

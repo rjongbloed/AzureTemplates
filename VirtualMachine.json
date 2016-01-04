@@ -1,0 +1,260 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "This is the name of the Virtual Network"
+      }
+ 
+    },
+    "adNicIPAddress": {
+      "type": "array",
+      "defaultValue": [
+        "10.0.2.4",
+       "10.0.2.5"
+      ],
+      "metadata": {
+        "description": "The IP address of the new VM's"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Admin username"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password"
+      }
+    },
+    "imagePublisher": {
+      "type": "string",
+      "defaultValue": "MicrosoftWindowsServer",
+      "metadata": {
+        "description": "Image Publisher"
+      }
+    },
+    "vmNamePrefix": {
+      "type": "string",
+      "defaultValue": "SW20GEN",
+      "metadata": {
+        "description": "Prefix to use for VM names"
+      }
+    },
+    "imageOffer": {
+      "type": "string",
+      "defaultValue": "WindowsServer",
+      "metadata": {
+        "description": "Image Offer"
+      }
+    },
+    "vmStartCount": {
+      "type": "int",
+      "defaultValue": 100,
+      "metadata": {
+        "description": "VM Count Start"
+      }
+    },
+    "imageSKU": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "metadata": {
+        "description": "Image SKU"
+      }
+    },
+    "vmStorageAccountContainerName": {
+      "type": "string",
+      "defaultValue": "dns",
+      "metadata": {
+        "description": "This is the storage account container name"
+      }
+ 
+    },
+    "vmEnvironment": {
+      "type": "string",
+      "defaultValue": "-P",
+      "metadata": {
+        "description": "Environment of the Virtual Machine"
+      }
+ 
+    },
+    "newStorageAccountName": {
+      "type": "string"
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_A2",
+      "metadata": {
+        "description": "This is the size of the VM"
+      }
+ 
+    }
+ 
+  },
+  "variables": {
+    "availabilitySetName": "AS20ADDS100",
+    "adDataDisk": "ADDataDisk",
+    "adDataDiskSize": 50,
+    "storageAccountType": "Standard_LRS",
+    "subnetName": "backendSubnet",
+    "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName'))]",
+    "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables ('subnetName'))]",
+    "networkInterfaceNamePrefix": "[parameters('vmNamePrefix')]",
+    "networkInterfaceNameSuffix": "-Nic",
+    "numberOfInstances": 2
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[parameters('newStorageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "StorageAccount"
+      },
+      "properties": {
+        "accountType": "[variables('storageAccountType')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[variables('availabilitySetName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "platformFaultDomainCount": 2
+      },
+      "tags": {
+        "displayName": "AvailabilitySet"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "VirtualNetwork"
+      },
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "10.0.2.0/24"
+            }
+          }
+        ]
+      }
+    },
+ 
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('networkInterfaceNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), variables('networkInterfaceNameSuffix'))]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NetworkInterface"
+      },
+      "copy": {
+        "name": "nicLoop",
+        "count": "[variables('numberOfInstances')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "[parameters('adNicIPAddress')[copyIndex()]]",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+ 
+      }
+    },
+ 
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'))]",
+      "copy": {
+        "name": "virtualMachineLoop",
+        "count": "[variables('numberOfInstances')]"
+      },
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "VirtualMachines"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('newStorageAccountName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', concat(variables('networkInterfaceNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), variables('networkInterfaceNameSuffix')))]",
+        "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]"
+      ],
+      "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+        },
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computername": "[concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'))]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[parameters('imagePublisher')]",
+            "offer": "[parameters('imageOffer')]",
+            "sku": "[parameters('imageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), '-OSdisk')]",
+            "vhd": {
+              "uri": "[concat('http://',parameters('newStorageAccountName'),'.blob.core.windows.net/vhds/',concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), '-os.vhd'))]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), '-data-disk1')]",
+              "vhd": {
+                "uri": "[concat('http://',parameters('newStorageAccountName'),'.blob.core.windows.net/vhds/',concat(parameters('vmNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), '-data.vhd'))]"
+              },
+              "caching": "None",
+              "createOption": "empty",
+              "diskSizeGB": "[variables('adDataDiskSize')]",
+              "lun": 0
+            }
+          ]
+ 
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('networkInterfaceNamePrefix'), copyindex(parameters('vmStartCount')), parameters('vmEnvironment'), variables('networkInterfaceNameSuffix')))]"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
